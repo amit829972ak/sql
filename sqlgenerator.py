@@ -16,10 +16,63 @@ st.markdown("""
 Upload your data files (CSV, Excel, JSON, Parquet) and run SQL queries with AI-powered help using DuckDB and Google Gemini.
 """)
 
+# Initialize session state
+if 'manual_api_key' not in st.session_state:
+    st.session_state.manual_api_key = ""
+if 'selected_model' not in st.session_state:
+    st.session_state.selected_model = "gemini-2.5-flash"
+
+# Available Gemini models
+AVAILABLE_MODELS = [
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+    "gemini-1.5-pro",
+    "gemini-1.5-flash",
+    "gemini-1.0-pro"
+]
+
+# Sidebar: API Configuration
+st.sidebar.header("⚙️ API Configuration")
+
+# Environment API key
+env_api_key = os.environ.get('AI_INTEGRATIONS_GEMINI_API_KEY')
+if env_api_key:
+    st.sidebar.success("✓ Environment API key detected")
+
+# Manual API key input
+st.sidebar.subheader("Manual API Key")
+manual_api_key = st.sidebar.text_input(
+    "Enter your Gemini API key (optional):",
+    value=st.session_state.manual_api_key,
+    type="password",
+    key="api_key_input"
+)
+st.session_state.manual_api_key = manual_api_key
+
+# Use manual key if provided, otherwise use environment key
+api_key = manual_api_key if manual_api_key else env_api_key
+
 # Configure Gemini API
-api_key = os.environ.get('AI_INTEGRATIONS_GEMINI_API_KEY')
 if api_key:
-    genai.configure(api_key=api_key)
+    try:
+        genai.configure(api_key=api_key)
+        st.sidebar.info("✓ API configured successfully")
+    except Exception as e:
+        st.sidebar.error(f"Failed to configure API: {str(e)}")
+        api_key = None
+else:
+    st.sidebar.warning("⚠️ No API key provided. AI features will be disabled.")
+
+# Model selection
+st.sidebar.subheader("Select Model")
+selected_model = st.sidebar.selectbox(
+    "Choose a Gemini model:",
+    AVAILABLE_MODELS,
+    index=AVAILABLE_MODELS.index(st.session_state.selected_model) if st.session_state.selected_model in AVAILABLE_MODELS else 0,
+    key="model_selector"
+)
+st.session_state.selected_model = selected_model
+st.sidebar.caption(f"Selected: {selected_model}")
 
 # Initialize session state for DuckDB connection and tables
 if 'duckdb_con' not in st.session_state:
@@ -105,9 +158,9 @@ if uploaded_files:
             if query_request:
                 try:
                     if not api_key:
-                        st.sidebar.warning("AI service not configured")
+                        st.sidebar.warning("AI service not configured. Please provide an API key.")
                     else:
-                        model = genai.GenerativeModel('gemini-2.5-flash')
+                        model = genai.GenerativeModel(selected_model)
                         
                         prompt = f"""Given these database tables and their structure:
 
@@ -183,9 +236,9 @@ Return ONLY the SQL query, no explanation."""
             if query:
                 try:
                     if not api_key:
-                        st.warning("AI service not configured")
+                        st.warning("AI service not configured. Please provide an API key.")
                     else:
-                        model = genai.GenerativeModel('gemini-2.5-flash')
+                        model = genai.GenerativeModel(selected_model)
                         
                         prompt = f"""Explain this SQL query in simple terms. What data is it retrieving and why?
 
@@ -209,9 +262,9 @@ Provide a clear, concise explanation."""
             if st.button("🔬 Get Data Insights"):
                 try:
                     if not api_key:
-                        st.warning("AI service not configured")
+                        st.warning("AI service not configured. Please provide an API key.")
                     else:
-                        model = genai.GenerativeModel('gemini-2.5-flash')
+                        model = genai.GenerativeModel(selected_model)
                         
                         # Convert result to string for analysis
                         result_summary = st.session_state.last_result.head(20).to_string()
